@@ -18,6 +18,13 @@ verifies these outcomes with the [tested workflow source](https://github.com/zac
 | Submitted `2ecb4b18` | 2,145 | 467 | 1, the solar comparison | Exported |
 | Reference repair `28cf7bfe` | 2,146 | 467 | 0 | Exported |
 
+The [Windows/Python 3.12 validation run](https://github.com/zack-dev-cm/reproject/actions/runs/36977616533)
+independently verifies the same two source commits using the
+[tested Windows workflow](https://github.com/zack-dev-cm/reproject/blob/53e750a15c0e0ff7569147a6213aac3378101ca8/.github/workflows/validate-roundtrip-windows.yml).
+Both Windows profiles have the same test totals and export coverage XML.
+The remote-FITS download timeout recorded in the earlier upstream Windows job
+does not recur in either profile. That original upstream job remains unchanged.
+
 The two sources have identical production code, regression tests and CI setup.
 Their only difference is the solar-reference FITS file. The submitted PR retains
 the original reference pending agreement about the intended output.
