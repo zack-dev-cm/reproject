@@ -41,6 +41,7 @@ jobs:
         run: python -m pip install tox 'coverage[toml]'
       - name: Run the full installed-package and documentation suite
         id: tests
+        shell: bash
         continue-on-error: true
         run: |
           mkdir -p artifacts
