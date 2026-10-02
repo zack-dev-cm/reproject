@@ -10,6 +10,14 @@ installed-package and documentation test suite through the repository's existing
 | Submitted PR head `2ecb4b18997b9435f3c518f4462a34e68cffd4aa` | The inverse-coordinate regression passes; only `test_coadd_solar_map` fails |
 | Reference repair `28cf7bfe3849f60fd138ac7db5c0f9e7954e9a2d` | The full suite passes with the corrected solar reference |
 
+The [successful validation run](https://github.com/zack-dev-cm/reproject/actions/runs/36973929134)
+verifies these outcomes with the [tested workflow source](https://github.com/zack-dev-cm/reproject/blob/fc9d310c5e252cec527e209780a4340fe923a961/.github/workflows/validate-roundtrip-coverage.yml):
+
+| Source | Passed | Skipped | Failed | Coverage XML |
+| --- | ---: | ---: | ---: | --- |
+| Submitted `2ecb4b18` | 2,145 | 467 | 1, the solar comparison | Exported |
+| Reference repair `28cf7bfe` | 2,146 | 467 | 0 | Exported |
+
 The two sources have identical production code, regression tests and CI setup.
 Their only difference is the solar-reference FITS file. The submitted PR retains
 the original reference pending agreement about the intended output.
