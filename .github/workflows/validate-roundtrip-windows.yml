@@ -1,0 +1,114 @@
+name: Windows round-trip tests and coverage export
+
+on:
+  push:
+    branches: [validation/roundtrip-windows-20261002]
+    paths: [.github/workflows/validate-roundtrip-windows.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: roundtrip-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: ${{ matrix.profile }} (Windows, Python 3.12)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: submitted, expected solar comparison failure
+            source: 2ecb4b18997b9435f3c518f4462a34e68cffd4aa
+            failures: 1
+          - profile: reference repair, expected full test pass
+            source: 28cf7bfe3849f60fd138ac7db5c0f9e7954e9a2d
+            failures: 0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: zack-dev-cm/reproject
+          ref: ${{ matrix.source }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install test runner and coverage before tests
+        run: python -m pip install tox 'coverage[toml]'
+      - name: Run the full installed-package and documentation suite
+        id: tests
+        shell: bash
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          python -m tox -e py312-test -- --junitxml="${GITHUB_WORKSPACE}/artifacts/pytest.xml" 2>&1 | tee artifacts/tox.log
+      - name: Export coverage after the test result
+        if: always()
+        run: |
+          python -m coverage xml -i -o artifacts/coverage.xml
+          python -m coverage report -i > artifacts/coverage.txt
+      - name: Verify the exact expected test result and coverage report
+        if: always()
+        env:
+          EXPECTED_SOURCE_SHA: ${{ matrix.source }}
+          EXPECTED_TEST_FAILURES: ${{ matrix.failures }}
+          TEST_STEP_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert head == os.environ['EXPECTED_SOURCE_SHA'], head
+          expected = int(os.environ['EXPECTED_TEST_FAILURES'])
+          assert os.environ['TEST_STEP_OUTCOME'] == ('failure' if expected else 'success')
+          cases = list(ET.parse('artifacts/pytest.xml').getroot().iter('testcase'))
+          failures = [c for c in cases if c.find('failure') is not None]
+          errors = [c for c in cases if c.find('error') is not None]
+          skipped = [c for c in cases if c.find('skipped') is not None]
+          assert len(cases) > 2000, len(cases)
+          assert not errors, [c.attrib for c in errors]
+          assert len(failures) == expected, [c.attrib for c in failures]
+          if expected:
+              assert failures[0].get('name') == 'test_coadd_solar_map', failures[0].attrib
+          regression = [c for c in cases if c.get('name') == 'test_reproject_undefined_inverse']
+          assert len(regression) == 1
+          assert all(regression[0].find(tag) is None for tag in ['failure', 'error', 'skipped'])
+          coverage = ET.parse('artifacts/coverage.xml').getroot()
+          assert float(coverage.get('line-rate')) > 0
+          assert any(c.get('filename', '').endswith('_wcs_utils.py') for c in coverage.iter('class'))
+          summary = {
+              'source': head,
+              'tests': len(cases),
+              'passed': len(cases) - len(failures) - len(errors) - len(skipped),
+              'failures': len(failures),
+              'skipped': len(skipped),
+              'expected_failures': expected,
+              'failed_tests': [c.get('name') for c in failures],
+              'coverage_line_rate': float(coverage.get('line-rate')),
+              'coverage_xml_exported': True,
+          }
+          Path('artifacts/summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('```json\n' + json.dumps(summary, indent=2) + '\n```\n')
+          PY
+      - name: Save test and coverage evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: roundtrip-windows-${{ matrix.source }}
+          path: |
+            artifacts/
+            .coverage
+          include-hidden-files: true
+          if-no-files-found: error
